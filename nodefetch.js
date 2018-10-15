@@ -31,9 +31,21 @@ fetch('https://a2cb93368c968029e8ffdf925ab3f4f6:10d3c4d7bef29c260283452aad702c18
     .then(res => res.json())
     .then(json => {
 
+        console.log(json.orders.length)
     	for(var i = 0; i < json.orders.length; i++){
-    		console.log("lineitems: "+json.orders[i].line_items[0].title)
-   		
+            console.log("###LOOP NUMBER "+i+"###")
+            //console.log("id: "+json.orders[i].id)
+            //console.log("order_number: "+json.orders[i].order_number)
+            //console.log("total price: "+json.orders[i].total_price)
+            //console.log("email: "+json.orders[i].email)
+            //console.log("fulfillment_status: "+json.orders[i].fulfillment_status)
+    		//console.log("lineitems: "+json.orders[i].line_items[0].title)
+            if(json.orders[i].customer){
+            //console.log("cust: "+JSON.stringify(json.orders[i].customer.email))
+            console.log("cust: "+json.orders[i].customer.email)
+            }
+        
+   		   //console.log(json)
     	}
     	
     }
