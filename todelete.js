@@ -1,4 +1,4 @@
-var jason = {}
+/*var jason = {}
 var key = 'Hunting'
 jason[key] = []
 
@@ -43,4 +43,6 @@ for(var i = 0; i < jason[key].length; i++){
 	if(!(jason[key][i].email && jason[key][i].location)){
 		console.log(jason[key][i].name+" has no email/location")
 	}
-}
+}*/
+
+console.log("test"+"test")
