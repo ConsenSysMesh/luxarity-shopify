@@ -9,6 +9,8 @@ AWS.config.update({region: 'us-west-1'});
 // Create an SQS service object
 var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
 
+const IPFS = require('ipfs');
+const fs = require('file-system');
 
 
 /*fetch('https://00000000000000000000000000000000:11111111111111111111111111111111@luxarity-test.myshopify.com/admin/orders.json')
@@ -40,7 +42,7 @@ var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
 //'https://00000000000000000000000000000000:11111111111111111111111111111111@luxarity-test.myshopify.com/admin/orders.json'
 //GET /admin/orders.json?ids=671314968687
 
-fetch('https://00000000000000000000000000000000:11111111111111111111111111111111@luxarity-test.myshopify.com/admin/orders.json?ids=671314968687')
+fetch('https://00000000000000000000000000000000:11111111111111111111111111111111@luxarity-test.myshopify.com/admin/orders.json?ids=667073937519')
     .then(res => res.json())
     .then(json => {
 
@@ -67,16 +69,28 @@ fetch('https://00000000000000000000000000000000:11111111111111111111111111111111
 
                 //console.log("orderId: "+json.orders[i].id);
                 //console.log("orderNumber: "+json.orders[i].order_number);
-                var redemptionPin = json.orders[i].id.toString()+json.orders[i].order_number.toString();
+                
+                ////var redemptionPin = json.orders[i].id.toString()+json.orders[i].order_number.toString();
+                
                 //console.log("remptionPin: "+redemptionPin);
-                var redemptionPin256 = utils.solidityKeccak256(['string'], [redemptionPin])
-                var customerEmail256 = utils.solidityKeccak256(['string'], [json.orders[i].customer.email])
+                
+                ////var redemptionPin256 = utils.solidityKeccak256(['string'], [redemptionPin])
+                ////var customerEmail256 = utils.solidityKeccak256(['string'], [json.orders[i].customer.email])
+                
                 //console.log("redemptionPin256: "+redemptionPin256)
                 //console.log("customerEmail256: "+customerEmail256)
                 //json.orders[i].customer.email
 
-                sendsqs(json.orders[i].id, json.orders[i].total_price, json.orders[i].order_number, customerEmail256, redemptionPin256)
-                
+                //sendsqs(json.orders[i].id, json.orders[i].total_price, json.orders[i].order_number, customerEmail256, redemptionPin256)
+                try{
+                console.log("sendIpfs before");
+                sendIpfs(json.orders[i].customer.email, json.orders[i].id, json.orders[i].total_price, json.orders[i].order_number);
+                console.log("sendIpfs after");
+                }catch(err){
+                    throw new Error(err)
+                }
+                //console.log("ihash: "+ihash);
+
                 }catch(err){
                     console.log("err for "+json.orders[i].id+" "+err)
                 }
@@ -90,7 +104,7 @@ fetch('https://00000000000000000000000000000000:11111111111111111111111111111111
     );
 
 //add regular customer_email
-async function sendsqs(orderid, total_price, order_number, customer_email_sha256, redemption_pin_sha256){
+async function sendsqs(tokenUri, orderid, total_price, order_number, customer_email_sha256, redemption_pin_sha256){
 	var params = {
 		 DelaySeconds: 10,
 		 MessageAttributes: {
@@ -100,11 +114,12 @@ async function sendsqs(orderid, total_price, order_number, customer_email_sha256
 		   }
 		 },
 		 //MessageBody: "{ \"orderid\" : \""+orderid+"\" , \"total_price\" : \""+total_price+"\" , \"order_number\" : \""+order_number+"\" , \"customer_email\" : \""+customer_email+"\"}",
-		 MessageBody: "{ \"tokenURI\" : \""+orderid+"\" , \"totalPrice\" : \""+total_price+"\" , \"customerEmailSHA256\" : \""+customer_email_sha256+"\" , \"orderId\" : \""+orderid+"\" , \"orderNumber\" : \""+order_number+"\" , \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\" ,  \"blockchain\" : \"Rinkeby\" }",
+		 MessageBody: "{ \"tokenURI\" : \""+tokenUri+"\" , \"totalPrice\" : "+total_price+" , \"customerEmailSHA256\" : \""+customer_email_sha256+"\" , \"orderId\" : "+orderid+" , \"orderNumber\" : "+order_number+" , \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\" ,  \"blockchain\" : \"Rinkeby\" }",
          QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/luxarity-orders"
 		 //QueueUrl: "https://sqs.us-west-1.amazonaws.com/711302153787/SQS_QUEUE_NAME"
 		};
 
+        console.log("message body: "+params.MessageBody)
 		await sqs.sendMessage(params, function(err, data) {
 		  if (err) {
 		    console.log("Error", err);
@@ -114,24 +129,25 @@ async function sendsqs(orderid, total_price, order_number, customer_email_sha256
 		});
 }
 
-async function sendIpfs(){
+async function sendIpfs(buyerId, orderId, totalPrice, orderNumber){
     //create IPFS file and link
     let orderMetaData = {
-      "buyerId": buyerID,
-      "orderId": body.orderId,
-      "orderAmount": body.totalPrice,
+      "buyerId": buyerId,
+      "orderId": orderId,
+      "orderAmount": totalPrice,
       "vendor": 'Luxarity',
       "dateOfSale": new Date(),
     };
     let orderMdString = JSON.stringify(orderMetaData);
-    let mdHash = sha256(orderMdString);
+    //let mdHash = sha256(orderMdString);
+    let mdHash = utils.solidityKeccak256(['string'], [orderMdString])
     fs.writeFile(mdHash + ".json", orderMdString);
 
     console.log("Waiting for IPFS URL to be generated.");
     //setting up IPFS node
-    let ipfsHash = null;
+    let ipfsHash;
     const node = new IPFS();
-    node.on('ready', async () => {
+    await node.on('ready', async () => {
       const version = await node.version()
 
       console.log('Version:', version.version);
@@ -147,9 +163,23 @@ async function sendIpfs(){
       const fileBuffer = await node.files.cat(filesAdded[0].hash);
 
       console.log('Added file contents:', fileBuffer.toString());
-    });
 
-    let ipfsURL = "https://ipfs.io/ipfs/" + ipfsHash;
+      let ipfsURL = "https://ipfs.io/ipfs/" + ipfsHash;
+      console.log("ipfsURL: "+ipfsURL)
+      node.stop(() => {
+            console.log("node is now offline")
+        })
+      //return ipfsURL;
+
+      var redemptionPin = orderId.toString()+orderNumber.toString();
+      //console.log("remptionPin: "+redemptionPin);
+      var redemptionPin256 = utils.solidityKeccak256(['string'], [redemptionPin])
+      var customerEmail256 = utils.solidityKeccak256(['string'], [buyerId])
+
+      await sendsqs(ipfsURL, orderId, totalPrice, orderNumber, customerEmail256, redemptionPin256);
+      console.log("done");
+
+    });
 }
 
 
