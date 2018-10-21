@@ -100,7 +100,7 @@ async function sendsqs(orderid, total_price, order_number, customer_email_sha256
 		   }
 		 },
 		 //MessageBody: "{ \"orderid\" : \""+orderid+"\" , \"total_price\" : \""+total_price+"\" , \"order_number\" : \""+order_number+"\" , \"customer_email\" : \""+customer_email+"\"}",
-		 MessageBody: "{ \"tokenURI\" : \""+orderid+"\" , \"totalPrice\" : \""+total_price+"\" , \"customerEmailSHA256\" : \""+customer_email_sha256+"\" , \"orderId\" : \""+orderid+"\" , \"orderNumber\" : \""+order_number+"\" , \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\" ,  \"blockchain : \"Rinkeby\" }",
+		 MessageBody: "{ \"tokenURI\" : \""+orderid+"\" , \"totalPrice\" : \""+total_price+"\" , \"customerEmailSHA256\" : \""+customer_email_sha256+"\" , \"orderId\" : \""+orderid+"\" , \"orderNumber\" : \""+order_number+"\" , \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\" ,  \"blockchain\" : \"Rinkeby\" }",
          QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/luxarity-orders"
 		 //QueueUrl: "https://sqs.us-west-1.amazonaws.com/711302153787/SQS_QUEUE_NAME"
 		};
@@ -112,6 +112,44 @@ async function sendsqs(orderid, total_price, order_number, customer_email_sha256
 		    console.log("Success", data.MessageId);
 		  }
 		});
+}
+
+async function sendIpfs(){
+    //create IPFS file and link
+    let orderMetaData = {
+      "buyerId": buyerID,
+      "orderId": body.orderId,
+      "orderAmount": body.totalPrice,
+      "vendor": 'Luxarity',
+      "dateOfSale": new Date(),
+    };
+    let orderMdString = JSON.stringify(orderMetaData);
+    let mdHash = sha256(orderMdString);
+    fs.writeFile(mdHash + ".json", orderMdString);
+
+    console.log("Waiting for IPFS URL to be generated.");
+    //setting up IPFS node
+    let ipfsHash = null;
+    const node = new IPFS();
+    node.on('ready', async () => {
+      const version = await node.version()
+
+      console.log('Version:', version.version);
+
+      const filesAdded = await node.files.add({
+        path: mdHash + ".json",
+        content: Buffer.from(orderMdString)
+      });
+
+      console.log('Added file:', filesAdded[0].path, filesAdded[0].hash);
+      ipfsHash = filesAdded[0].hash;
+
+      const fileBuffer = await node.files.cat(filesAdded[0].hash);
+
+      console.log('Added file contents:', fileBuffer.toString());
+    });
+
+    let ipfsURL = "https://ipfs.io/ipfs/" + ipfsHash;
 }
 
 
