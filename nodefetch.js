@@ -100,11 +100,12 @@ async function sendsqs(orderid, total_price, order_number, customer_email_sha256
 		   }
 		 },
 		 //MessageBody: "{ \"orderid\" : \""+orderid+"\" , \"total_price\" : \""+total_price+"\" , \"order_number\" : \""+order_number+"\" , \"customer_email\" : \""+customer_email+"\"}",
-		 MessageBody: "{ \"tokenURI\" : \""+orderid+"\" , \"totalPrice\" : \""+total_price+"\" , \"customerEmailSHA256\" : \""+customer_email_sha256+"\" , \"orderId\" : \""+orderid+"\" , \"orderNumber\" : \""+order_number+"\" , \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\" ,  \"blockchain\" : \"Rinkeby\" }",
+		 MessageBody: "{ \"tokenURI\" : \""+orderid+"\" , \"totalPrice\" : "+total_price+" , \"customerEmailSHA256\" : \""+customer_email_sha256+"\" , \"orderId\" : "+orderid+" , \"orderNumber\" : "+order_number+" , \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\" ,  \"blockchain\" : \"Rinkeby\" }",
          QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/luxarity-orders"
 		 //QueueUrl: "https://sqs.us-west-1.amazonaws.com/711302153787/SQS_QUEUE_NAME"
 		};
 
+        console.log("message body: "+params.MessageBody)
 		await sqs.sendMessage(params, function(err, data) {
 		  if (err) {
 		    console.log("Error", err);
