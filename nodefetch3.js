@@ -63,9 +63,9 @@ const node = new IPFS();
             console.log('Added file:', filesAdded[0].path, filesAdded[0].hash);
             ipfsHash = filesAdded[0].hash;
 
-            const fileBuffer = await node.files.cat(filesAdded[0].hash);
+            //const fileBuffer = await node.files.cat(filesAdded[0].hash);
 
-            console.log('Added file contents:', fileBuffer.toString());
+            //console.log('Added file contents:', fileBuffer.toString());
 
             //let ipfsURL = "https://ipfs.io/ipfs/" + ipfsHash;
             ipfsURL = "https://ipfs.io/ipfs/" + ipfsHash;
