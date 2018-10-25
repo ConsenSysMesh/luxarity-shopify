@@ -1,129 +1,135 @@
 const fetch = require('node-fetch');
 const utils = require('ethers').utils;
+const sha256 = require('js-sha256');
 
 // Load the AWS SDK for Node.js
 var AWS = require('aws-sdk');
 // Set the region 
-AWS.config.update({region: 'us-west-1'});
+AWS.config.update({region: 'us-east-1'});
 
 // Create an SQS service object
 var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
 
-const IPFS = require('ipfs');
-const fs = require('file-system');
+const { Client } = require('pg');
 
+getorderid()
 
-const node = new IPFS();
-    try{
-    node.on('ready', async () => {
-      const version = await node.version()
-      console.log("node ready")
+async function getorderid(){
+  var latestOrderId = await getLastOrderId();
+  console.log("latestOrderId: "+JSON.stringify(latestOrderId));
 
-      var orderjson = await fetch('https://00000000000000000000000000000000:11111111111111111111111111111111@luxarity-test.myshopify.com/admin/orders.json?since_id=670021091439')
-        .then(res => res.json())
+  //var fetchUrl = 'https://00000000000000000000000000000000:11111111111111111111111111111111@luxarity-test.myshopify.com/admin/orders.json?since_id='+latestOrderId;
+  var fetchUrl = 'https://00000000000000000000000000000000:11111111111111111111111111111111@luxarity-popup-2016.myshopify.com/admin/orders.json?since_id='+latestOrderId;
+  
+  console.log("fetchUrl : "+fetchUrl)
+fetch(fetchUrl)
+    .then(res => res.json())
+    .then(json => {
 
-            console.log("calling jsonloop ")
-            //jsonLoop(json);
-            for(var i = 0; i < orderjson.orders.length; i++){
-            console.log("###LOOP NUMBER "+i+"###")
-            console.log("orderid: "+orderjson.orders[i].id)
+        console.log("looping through orders")
+      for(var i = 0; i < json.orders.length; i++){
 
-            if(!(orderjson.orders[i].id && orderjson.orders[i].total_price && orderjson.orders[i].order_number && orderjson.orders[i].customer)){
+            if(!(json.orders[i].id && json.orders[i].total_price && json.orders[i].order_number && json.orders[i].customer)){
                 //place holder for std out - possibly dlq
-                console.log("order missing attributes: "+orderjson.orders[i].id+" loop number: "+i)
+                console.log("order missing attributes: "+json.orders[i].id+" loop number: "+i)
             }else{
-            
-            console.log("sending to ipfs")
+                console.log("send this order id to sqs queue: "+json.orders[i].id + " "+json.orders[i].customer.email)
 
-            let orderMetaData = {
-              "buyerId": orderjson.orders[i].customer.email,
-              "orderId": orderjson.orders[i].id,
-              "orderAmount":  orderjson.orders[i].total_price,
-              "vendor": 'Luxarity',
-              "dateOfSale": new Date(),
-            };
-            let orderMdString = JSON.stringify(orderMetaData);
-            //let mdHash = sha256(orderMdString);
-            let mdHash = utils.solidityKeccak256(['string'], [orderMdString])
-            //fs.writeFile(mdHash + ".json", orderMdString);
 
-            console.log("Waiting for IPFS URL to be generated.");
-            //setting up IPFS node
-            let ipfsHash;
-            let ipfsURL;
+                var redemptionPin = json.orders[i].id.toString()+json.orders[i].order_number.toString();
+                console.log("redemptionPin: "+redemptionPin)
+                var redemptionPin256reg = sha256(redemptionPin)
+                console.log("redemptionPin256reg: "+redemptionPin256reg)
+                var redemptionPin256 = redemptionPin256reg.toUpperCase()
 
-            //////////////
-            console.log('Version:', version.version);
+                
+                var customerEmail256reg = sha256(json.orders[i].customer.email)
+                var customerEmail256 = customerEmail256reg.toUpperCase()
 
-            const filesAdded = await node.files.add({
-              path: mdHash + ".json",
-              content: Buffer.from(orderMdString)
-            });
+                var ipfsURL = 'ipfs_not_generated';
+                
+                try{
+                 sendsqs(ipfsURL, json.orders[i].id, json.orders[i].total_price, json.orders[i].order_number, customerEmail256, json.orders[i].customer.email, redemptionPin256);
 
-            console.log('Added file:', filesAdded[0].path, filesAdded[0].hash);
-            ipfsHash = filesAdded[0].hash;
+                }catch(err){
+                    console.log("err for "+json.orders[i].id+" "+err)
+                }
 
-            //const fileBuffer = await node.files.cat(filesAdded[0].hash);
+            }
 
-            //console.log('Added file contents:', fileBuffer.toString());
-
-            //let ipfsURL = "https://ipfs.io/ipfs/" + ipfsHash;
-            ipfsURL = "https://ipfs.io/ipfs/" + ipfsHash;
-            console.log("ipfsURL: "+ipfsURL)
-
-            
-            //return ipfsURL;
-
-            var redemptionPin = orderjson.orders[i].id.toString()+orderjson.orders[i].order_number.toString();
-            //console.log("remptionPin: "+redemptionPin);
-            var redemptionPin256 = utils.solidityKeccak256(['string'], [redemptionPin])
-            var customerEmail256 = utils.solidityKeccak256(['string'], [orderjson.orders[i].customer.email])
-
-            console.log("sending sqs for: "+orderjson.orders[i].id)
-            await sendsqs(ipfsURL, orderjson.orders[i].id, orderjson.orders[i].tota_price, orderjson.orders[i].order_number, customerEmail256, redemptionPin256);
-            console.log("done");
-            /////////////
-
-          }
-
-        }
-
-        node.stop(() => {
-         // node is now 'offline'
-         console.log("stopping node")
-        })
+        
+      }
       
+    })
+}
 
+async function getLastOrderId() {
+
+  console.log("inside getLastOrderId : ");
+
+
+
+  const client = new Client({
+      host     : "luxarity.cijmyc3a39cj.us-east-1.rds.amazonaws.com",
+      database     : "lux",
+      user : "b4siga",
+      password : "Social1mp4ct",
+      port     : "5432"
     })
 
-   }catch(err){console.log("ipfs on ready error: "+err)}
+  const query = {
+    name: 'getLastOrderId',
+    text: "select max(orderid) from orders",
+    values: []
+  }
+
+    try {
+      console.log("inside client.connect try");
+        await client.connect();
+        const res = await client.query(query);
+        if(res.rows === undefined || res.rows.length == 0){
+          throw new Error('no rows returned');
+        }else{
+          console.log("res.rows: "+res.rows)
+          return res.rows[0].max;
+        }
+      } catch (e) {
+        throw e;
+      } finally {
+        await client.end();
+      }
+
+  };
 
 
-async function sendsqs(tokenUri, orderid, total_price, order_number, customer_email_sha256, redemption_pin_sha256){
-	var params = {
-		 DelaySeconds: 10,
-		 MessageAttributes: {
-		  "LuxarityOrder": {
-		    DataType: "String",
-		    StringValue: "Individual Lux Order for SoldOrderToMint endpoint"
-		   }
-		 },
-		 //MessageBody: "{ \"orderid\" : \""+orderid+"\" , \"total_price\" : \""+total_price+"\" , \"order_number\" : \""+order_number+"\" , \"customer_email\" : \""+customer_email+"\"}",
-		 MessageBody: "{ \"tokenURI\" : \""+tokenUri+"\", \"totalPrice\" : "+total_price+", \"customerEmailSHA256\" : \""+customer_email_sha256+"\", \"orderId\" : "+orderid+", \"orderNumber\" : "+order_number+", \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\",  \"blockchain\" : \"Rinkeby\" }",
-     QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/lux-ebs-test"
+//add regular customer_email
+async function sendsqs(tokenUri, orderid, total_price, order_number, customer_email_sha256, customerEmail, redemption_pin_sha256){
+  var params = {
+     DelaySeconds: 10,
+     MessageAttributes: {
+      "LuxarityOrder": {
+        DataType: "String",
+        StringValue: "Individual Lux Order for SoldOrderToMint endpoint"
+       }
+     },
+     //MessageBody: "{ \"orderid\" : \""+orderid+"\" , \"total_price\" : \""+total_price+"\" , \"order_number\" : \""+order_number+"\" , \"customer_email\" : \""+customer_email+"\"}",
+     MessageBody: "{ \"tokenURI\" : \""+tokenUri+"\", \"totalPrice\" : "+total_price+", \"customerEmailSHA256\" : \""+customer_email_sha256+"\", \"customerEmail\" : \""+customerEmail+"\" , \"orderId\" : "+orderid+", \"orderNumber\" : "+order_number+", \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\",  \"blockchain\" : \"Rinkeby\" }",
+     QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/luxarity-orders"
+     //QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/lux-ebs-test"
      //QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/luxarity-orders"
-		 //QueueUrl: "https://sqs.us-west-1.amazonaws.com/711302153787/SQS_QUEUE_NAME"
-		};
+     //QueueUrl: "https://sqs.us-west-1.amazonaws.com/711302153787/SQS_QUEUE_NAME"
+    };
 
         console.log("message body: "+params.MessageBody)
-		await sqs.sendMessage(params, function(err, data) {
-		  if (err) {
-		    console.log("Error", err);
-		  } else {
-		    console.log("Success", data.MessageId);
-		  }
-		});
+    await sqs.sendMessage(params, function(err, data) {
+      if (err) {
+        console.log("Error", err);
+      } else {
+        console.log("Success", data.MessageId);
+      }
+    });
 }
+
 
 
 
