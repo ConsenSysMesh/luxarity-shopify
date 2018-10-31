@@ -4,7 +4,7 @@ const utils = require('ethers').utils;
 // Load the AWS SDK for Node.js
 var AWS = require('aws-sdk');
 // Set the region 
-AWS.config.update({region: 'us-west-1'});
+AWS.config.update({region: 'us-east-1'});
 
 // Create an SQS service object
 var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
@@ -19,7 +19,11 @@ const node = new IPFS();
       const version = await node.version()
       console.log("node ready")
 
-      var orderjson = await fetch('https://a2cb93368c968029e8ffdf925ab3f4f6:10d3c4d7bef29c260283452aad702c18@luxarity-test.myshopify.com/admin/orders.json?since_id=670021091439')
+      //arn:aws:lambda:us-east-1:711302153787:function:luxarity-lambda-sensui-csi-develop-soldOrderToMint
+      //684348276847
+      //684348276847
+      //https://a2cb93368c968029e8ffdf925ab3f4f6:10d3c4d7bef29c260283452aad702c18@luxarity-test.myshopify.com/admin/orders.json?since_id=670021091439
+      var orderjson = await fetch('https://a2cb93368c968029e8ffdf925ab3f4f6:10d3c4d7bef29c260283452aad702c18@luxarity-test.myshopify.com/admin/orders.json?ids=684348276847')
         .then(res => res.json())
 
             console.log("calling jsonloop ")
@@ -80,7 +84,8 @@ const node = new IPFS();
             var customerEmail256 = utils.solidityKeccak256(['string'], [orderjson.orders[i].customer.email])
 
             console.log("sending sqs for: "+orderjson.orders[i].id)
-            await sendsqs(ipfsURL, orderjson.orders[i].id, orderjson.orders[i].tota_price, orderjson.orders[i].order_number, customerEmail256, redemptionPin256);
+            //console.log("order total_price: "+)
+            await sendsqs(ipfsURL, orderjson.orders[i].id, orderjson.orders[i].total_price, orderjson.orders[i].order_number, customerEmail256, redemptionPin256);
             console.log("done");
             /////////////
 
@@ -110,7 +115,8 @@ async function sendsqs(tokenUri, orderid, total_price, order_number, customer_em
 		 },
 		 //MessageBody: "{ \"orderid\" : \""+orderid+"\" , \"total_price\" : \""+total_price+"\" , \"order_number\" : \""+order_number+"\" , \"customer_email\" : \""+customer_email+"\"}",
 		 MessageBody: "{ \"tokenURI\" : \""+tokenUri+"\", \"totalPrice\" : "+total_price+", \"customerEmailSHA256\" : \""+customer_email_sha256+"\", \"orderId\" : "+orderid+", \"orderNumber\" : "+order_number+", \"redemptionPinSHA256\" : \""+redemption_pin_sha256+"\",  \"blockchain\" : \"Rinkeby\" }",
-     QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/lux-ebs-test"
+     QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/luxarity-orders"
+     //QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/lux-ebs-test"
      //QueueUrl: "https://sqs.us-east-1.amazonaws.com/711302153787/luxarity-orders"
 		 //QueueUrl: "https://sqs.us-west-1.amazonaws.com/711302153787/SQS_QUEUE_NAME"
 		};
