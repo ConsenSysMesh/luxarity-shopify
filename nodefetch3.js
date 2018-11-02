@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const utils = require('ethers').utils;
 const sha256 = require('js-sha256');
+//const sleep = require('sleep')
 
 // Load the AWS SDK for Node.js
 var AWS = require('aws-sdk');
@@ -61,6 +62,8 @@ fetch(fetchUrl)
       }
       
     })
+
+    //sleep.sleep(15)
 }
 
 async function getLastOrderId() {
