@@ -14,6 +14,26 @@ var sqs = new AWS.SQS({apiVersion: '2012-11-05'});
 const { Client } = require('pg');
 var fetch = require('node-fetch');
 
+letsgo();
+async function letsgo(){
+
+var x = 0;
+while(true){
+    
+    var latestOrder = await getLastOrderId();
+    console.log("latestOrder: "+latestOrder)
+
+    var fetchUrl = 'https://4ec131b8085501131e65d77fdbf3ad74:1ca008f697f8bc87bd89a45e64604e89@luxarity-popup-2016.myshopify.com/admin/orders.json?since_id='+latestOrder.toString();
+    console.log("fetchUrl: "+fetchUrl)
+
+    await getDataFromAPI(fetchUrl)
+    console.log("x: "+x)
+    x++
+    sleep.sleep(30)
+    }
+    
+}
+
   
 
 
@@ -38,10 +58,23 @@ var fetch = require('node-fetch');
         let response = await fetch(fetchUrl)
         let json = await response.json()
         //console.log(JSON.stringify(data, null, "\t"))
-        if(!json.orders.length === 0 && json.orders.length === null){
+        if(json.orders.length === 0){
+          console.log("length 0"+json.orders.length)
+        }
+        if(!json.orders.length === 0){
+          console.log("length not  0"+json.orders.length)
+        }
+        if(json.orders.length === null){
+          console.log("length null")
+        }
+        if(!json.orders.length === 0){
+          console.log("length not  0"+json.orders.length)
+        }
+
+        if(!(json.orders.length === 0 || json.orders.length === null)){
         try{
         for(var i = 0; i < json.orders.length; i++){
-          console.log("i")
+          console.log("entered for loop")
           if(!(json.orders[i].id && json.orders[i].total_price && json.orders[i].order_number && json.orders[i].customer)){
                 //place holder for std out - possibly dlq
                 console.log("order missing attributes: "+json.orders[i].id+" loop number: "+i)
@@ -62,8 +95,8 @@ var fetch = require('node-fetch');
                 var ipfsURL = 'ipfs_not_generated';
                 
                 try{
-                 sendsqs(ipfsURL, json.orders[i].id, json.orders[i].total_price, json.orders[i].order_number, customerEmail256, json.orders[i].customer.email, redemptionPin256);
-
+                 //sendsqs(ipfsURL, json.orders[i].id, json.orders[i].total_price, json.orders[i].order_number, customerEmail256, json.orders[i].customer.email, redemptionPin256);
+                 await insertOrderTest(json.orders[i].id, json.orders[i].order_number, json.orders[i].customer.email, redemptionPin256, json.orders[i].total_price, customerEmail256, ipfsURL);
                 }catch(err){
                     console.log("err for "+json.orders[i].id+" "+err)
                 }
@@ -78,25 +111,7 @@ var fetch = require('node-fetch');
        return "getDataFromAPI done";
     }
 
-letsgo();
-async function letsgo(){
 
-var x = 0;
-while(true){
-    
-    var latestOrder = await getLastOrderId();
-    console.log("latestOrder: "+latestOrder)
-    var fetchUrl = 'https://4ec131b8085501131e65d77fdbf3ad74:1ca008f697f8bc87bd89a45e64604e89@luxarity-popup-2016.myshopify.com/admin/orders.json?since_id='+latestOrder.toString();
-    console.log("fetchUrl: "+fetchUrl)
-    await getDataFromAPI(fetchUrl)
-    console.log("x: "+x)
-    x++
-    sleep.sleep(30)
-    }
-    
-
-
-}
 
 async function getLastOrderId() {
 
@@ -104,7 +119,7 @@ async function getLastOrderId() {
 
 
 
-  const client = new Client({
+  var client = new Client({
       host     : "luxarity.cijmyc3a39cj.us-east-1.rds.amazonaws.com",
       database     : "lux",
       user : "b4siga",
@@ -112,16 +127,54 @@ async function getLastOrderId() {
       port     : "5432"
     })
 
-  const query = {
+  var query = {
     name: 'getLastOrderId',
-    text: "select max(orderid) from orders_prod",
+    text: "select max(orderid) from orders_845",
     values: []
   }
 
     try {
       console.log("inside client.connect try");
         await client.connect();
-        const res = await client.query(query);
+        var res = await client.query(query);
+        if(res.rows === undefined || res.rows.length == 0){
+          throw new Error('no rows returned');
+        }else{
+          console.log("res.rows: "+res.rows)
+          return res.rows[0].max;
+        }
+      } catch (e) {
+        throw e;
+      } finally {
+        await client.end();
+      }
+
+  };
+
+  async function insertOrderTest(orderid, ordernumber, customeremail, redemptionhash, totalcost, customeremail256, tokenuri) {
+
+  console.log("inside getLastOrderId : ");
+
+
+
+  var client = new Client({
+      host     : "luxarity.cijmyc3a39cj.us-east-1.rds.amazonaws.com",
+      database     : "lux",
+      user : "b4siga",
+      password : "Social1mp4ct",
+      port     : "5432"
+    })
+
+  var query = {
+    name: 'testInsertOrderProd',
+    text: "INSERT INTO orders_prod (orderid, ordernumber, customeremail, redemptionhash, totalcost, customeremail256, tokenuri) VALUES ($1,$2,$3,$4,$5,$6,$7) returning *",
+    values: [orderid, ordernumber, customeremail, redemptionhash, totalcost, customeremail256, tokenuri]
+  }
+
+    try {
+      console.log("inside client.connect try");
+        await client.connect();
+        var res = await client.query(query);
         if(res.rows === undefined || res.rows.length == 0){
           throw new Error('no rows returned');
         }else{
