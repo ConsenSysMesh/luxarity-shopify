@@ -12,6 +12,7 @@
   "dependencies": {
     "aws-sdk": "^2.331.0",
     "body-parser": "^1.18.3",
+    "csvtojson": "^2.0.8",
     "ethers": "^4.0.7",
     "express": "^4.16.3",
     "file-system": "^2.2.2",
